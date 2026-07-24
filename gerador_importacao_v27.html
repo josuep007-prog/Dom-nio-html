@@ -45,9 +45,9 @@
   .top-in{max-width:920px;margin:0 auto;padding:30px 22px 26px}
   h1{font-size:23px;font-weight:700;letter-spacing:-.025em;margin:0;color:var(--ink)}
   h1 em{font-style:normal;color:var(--mod-ink);transition:color .25s}
-  .sub{color:var(--ink-soft);font-size:13.5px;margin:8px 0 0;max-width:66ch;text-wrap:pretty}
+  .sub{color:var(--ink-soft);font-size:13.5px;margin:8px 0 0;max-width:80ch;text-wrap:pretty}
   .sub code{font-family:var(--mono);font-size:12px;color:var(--ink-2);
-    background:var(--rule-2);padding:1px 6px;border-radius:5px}
+    background:var(--rule-2);padding:1px 6px;border-radius:5px;white-space:nowrap}
   .offline{display:inline-flex;align-items:center;gap:7px;margin:14px 0 0;
     font-size:11.5px;color:var(--green);letter-spacing:.01em;font-weight:600}
   .offline::before{content:"";width:7px;height:7px;border-radius:50%;
@@ -155,11 +155,6 @@
   .drop-file{font-family:var(--mono);font-size:12.5px;color:var(--mod-ink);margin-top:11px;
     word-break:break-all;font-weight:600}
 
-  .nota{font-size:12.5px;color:var(--ink-2);margin:14px 0 0;line-height:1.6;
-    padding:12px 15px;background:var(--mod-soft);border-radius:var(--r);text-wrap:pretty;
-    border:1px solid color-mix(in srgb,var(--mod) 18%,transparent)}
-  .nota strong{color:var(--mod-ink)}
-  .nota-tight{margin-top:9px;margin-bottom:0}
 
   .bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:22px}
   button{font-family:var(--sans);font-size:14px;font-weight:650;padding:11px 20px;
@@ -354,10 +349,10 @@
   button.mini:hover:not(:disabled){background:var(--mod-soft);border-color:var(--mod);
     color:var(--mod-ink);filter:none;box-shadow:none}
 
-  #saida:empty::before{content:"O arquivo aparece aqui depois de gerar — cada registro medido campo a campo, para conferir antes de baixar.";
+  #saida:empty::before{content:"A conferência aparece aqui depois de gerar.";
     display:block;border:1.5px dashed var(--rule);border-radius:var(--r-lg);
-    padding:38px 30px;text-align:center;color:var(--ink-soft);font-size:13px;line-height:1.6;
-    margin-top:24px;max-width:48ch;margin-left:auto;margin-right:auto;
+    padding:26px 30px;text-align:center;color:var(--ink-soft);font-size:13px;line-height:1.6;
+    margin-top:24px;max-width:44ch;margin-left:auto;margin-right:auto;
     background:var(--card);box-shadow:var(--shadow)}
   #saida:not(:empty){animation:reveal .34s ease both}
 
@@ -632,9 +627,9 @@
 <header class="top">
   <div class="top-in">
     <h1>Gerador de importação <em>Domínio</em></h1>
-    <p class="sub">Lê a planilha preenchida pelo cliente, confere linha a linha e monta o
-      arquivo de largura fixa para <code>Utilitários &gt; Importação &gt; de Arquivo Texto</code>.</p>
-    <p class="offline">Roda inteiro neste computador — nenhum dado sai daqui</p>
+    <p class="sub">Monta o arquivo de largura fixa para
+      <code>Utilitários &gt; Importação &gt; de Arquivo Texto</code>.</p>
+    <p class="offline">Roda neste computador — nenhum dado sai daqui</p>
 
     <div class="tabs" role="tablist">
       <button class="tab active" id="tabRpa" role="tab" aria-selected="true">RPA
@@ -655,17 +650,16 @@
 <h2><span class="step">1</span> Modelo para o cliente</h2>
 <div class="modelo">
   <div class="modelo-txt">
-    Baixe a planilha pronta, preencha o cadastro e mande pro cliente completar só a coluna de valor.
-    <b>As abas vêm travadas</b> — só as células de digitação aceitam texto, então o leiaute volta intacto.
+    Planilha pronta, com as abas <b>travadas</b> — o cliente preenche só a coluna de valor
+    e o leiaute volta intacto.
   </div>
   <button id="btnModelo" class="ghost">Baixar modelo de RPA</button>
 </div>
 
 <div class="modelo modelo-contra" id="cardContra">
   <div class="modelo-txt">
-    Solte aqui um PDF do Domínio — <b>Relação Geral dos Líquidos</b> (traz o código de cada um),
-    contracheque ou recibo de RPA. Leio quem são as pessoas, os códigos e as rubricas,
-    e monto o modelo do módulo certo. Você confere tudo num menu antes da planilha sair.
+    Solte um PDF do Domínio — <b>Relação Geral dos Líquidos</b>, contracheque ou recibo de RPA —
+    e monto o modelo já com as pessoas, os códigos e as rubricas.
     <details class="colar">
       <summary>ou cole o texto do contracheque</summary>
       <textarea id="cpColado" rows="5" placeholder="Cole aqui o texto copiado do contracheque, mantendo as colunas…"></textarea>
@@ -678,10 +672,8 @@
 
 <div class="modelo modelo-comparar" id="cardComparar">
   <div class="modelo-txt">
-    Solte <b>duas Relações Gerais dos Líquidos</b> — a do mês passado e a deste mês — e eu comparo
-    as duas folhas: quem entrou, quem saiu e quem teve o líquido alterado, com a diferença em
-    reais e em percentual. É a conferência que o departamento pessoal faz no fechamento,
-    sem gerar arquivo nenhum.
+    Solte <b>duas Relações Gerais dos Líquidos</b>, de meses diferentes: mostro quem entrou,
+    quem saiu e quem mudou de líquido.
   </div>
   <button id="btnComparar" class="ghost">Comparar duas folhas</button>
 </div>
@@ -694,11 +686,6 @@
   <div class="drop-file" id="fileDePara"></div>
 </div>
 <input type="file" id="inDePara" accept=".xlsx,.xlsm,.xls" multiple hidden>
-<p class="nota">
-  Lê nome, código e valor direto da aba de cadastro — <strong>preencha o cadastro de antemão</strong>
-  e deixe pro cliente só a coluna de valor. Preencha também o <strong>Total esperado</strong>
-  na aba Parametros: o gerador confere a soma e avisa se der diferença.
-</p>
 
 <div class="bar">
   <button id="btnGerar" disabled>Gerar arquivo</button>
@@ -715,10 +702,8 @@
 <div id="saida"></div>
 
 <footer>
-  Leiaute oficial Domínio — RPA: registro Sefip 13 por valor líquido, 148 caracteres ·
-  Lançamentos: registro “10”, 48 caracteres.<br>
-  Arquivo gravado em Latin-1 com quebra de linha CRLF, como o Domínio espera.
-  O relatório .csv sai no mesmo padrão, para anexar ao processo.
+  RPA: registro Sefip 13, 148 caracteres · Lançamentos: registro “10”, 48 caracteres ·
+  gravado em Latin-1 com CRLF, como o Domínio espera.
 </footer>
 
 </div>
@@ -766,8 +751,8 @@
 
       <label class="linha-check" id="linhaValores">
         <input type="checkbox" id="cpTrazerValores">
-        <span id="cpTextoValores">Trazer os valores deste documento. Deixe desmarcado
-          para a planilha sair em branco, pronta para o cliente preencher.</span>
+        <span id="cpTextoValores">Trazer os valores do documento — sem isso a planilha
+          sai em branco, para o cliente preencher.</span>
       </label>
 
       <div id="secRubricas">
@@ -1497,9 +1482,8 @@ function abrirMenuContracheque(dados, origem, tipo){
   $cp("campoData").hidden   = !rpa;
   $cp("campoDesc").hidden   = !rpa;
   $cp("secRubricas").hidden = rpa;
-  $cp("cpTextoValores").textContent = rpa
-    ? "Trazer os valores deste documento. Deixe desmarcado para a planilha sair em branco, pronta para o cliente preencher."
-    : "Trazer os valores deste contracheque para cada rubrica. Deixe desmarcado para a planilha sair em branco, pronta para o cliente preencher.";
+  $cp("cpTextoValores").textContent =
+    "Trazer os valores do documento — sem isso a planilha sai em branco, para o cliente preencher.";
   $cp("cpBuscaRub").value = "";
   $cp("cpBuscaPes").value = "";
   $cp("cpTrazerValores").checked = false;
@@ -1507,8 +1491,8 @@ function abrirMenuContracheque(dados, origem, tipo){
     ? "Autônomos que viram linha" : "Empregados que viram linha";
   const jaTemCodigo = listaAtual().some(p=>!vazio(p.codigo));
   $cp("cpNotaPessoas").textContent = jaTemCodigo
-    ? "Os códigos vieram do documento. Confira um contra o cadastro do Domínio antes de mandar a planilha para o cliente — dá para corrigir aqui mesmo."
-    : "O código não vem neste documento — digite aqui o código do cadastro no Domínio. Quem ficar sem código sai com a célula em branco na planilha.";
+    ? "Os códigos vieram do documento — confira contra o cadastro do Domínio."
+    : "O código não vem neste documento — digite o do cadastro no Domínio.";
 
   $cp("cpAvisos").innerHTML = dados.avisos.length
     ? `<div class="msg warn"><strong>Confira antes de gerar</strong><ul>`+
@@ -1577,10 +1561,9 @@ function renderDescartadas(){
   bloco.hidden = false;
   bloco.open = false;
   $cp("cpDescartadasN").textContent =
-    `${desc.length} rubrica${desc.length===1?"":"s"} que o Domínio calcula ${desc.length===1?"ficou":"ficaram"} de fora — ver ${desc.length===1?"qual":"quais"}`;
+    `${desc.length} rubrica${desc.length===1?"":"s"} que o Domínio calcula ${desc.length===1?"ficou":"ficaram"} de fora`;
   $cp("cpDescartadasLista").innerHTML =
-    desc.map(r=>`<b>${r.codigo}</b> ${escapar(r.descricao)}`).join(" · ") +
-    `<br>Se precisar lançar alguma delas, cadastre pelo campo abaixo.`;
+    desc.map(r=>`<b>${r.codigo}</b> ${escapar(r.descricao)}`).join(" · ");
 }
 
 function renderListaPessoas(){
@@ -2260,7 +2243,7 @@ rpa: {
   rotulo: "RPA",
   nomeArquivoSaida: "rpa_importacao.txt",
   dropTitulo: "Arraste a planilha de RPA, ou clique para escolher",
-  dropHint: "Abas <em>Parametros</em> e <em>Contribuintes</em> — nome, código e valor do mês na mesma linha. Pode soltar mais de uma planilha para gerar em lote",
+  dropHint: "Abas <em>Parametros</em> e <em>Contribuintes</em> · várias planilhas geram em lote",
   abaValores: "Contribuintes",
   campos: [
     {nome:"Código da empresa",     ini:1,   tam:7,   curto:"empresa"},
@@ -2403,7 +2386,7 @@ lancamentos: {
   rotulo: "Lançamentos",
   nomeArquivoSaida: "lancamentos_importacao.txt",
   dropTitulo: "Arraste a planilha de Lançamentos, ou clique para escolher",
-  dropHint: "Abas <em>Parametros</em> e <em>Empregados</em> — nome, código e valores do mês na mesma linha; código da rubrica embutido no cabeçalho da coluna. Pode soltar mais de uma planilha para gerar em lote",
+  dropHint: "Abas <em>Parametros</em> e <em>Empregados</em> · rubrica no cabeçalho, como <em>Nome (código)</em> · várias planilhas geram em lote",
   abaValores: "Empregados",
   campos: [
     {nome:"Fixo \"10\"",           ini:1,  tam:2,  curto:"tp"},
@@ -3461,8 +3444,8 @@ function render(mod, r, ignoradas){
           `<td class="pos num">R$ ${moeda(g.soma)}</td></tr>`;
       }).join("")+
       `</tbody></table>
-      <p class="resumo-dica">Desmarque a rubrica que o Domínio recusar na importação — ela sai do
-        .txt e aparece numa lista à parte, para lançar direto no sistema.</p>
+      <p class="resumo-dica">Desmarque a rubrica que o Domínio recusar — ela sai do .txt
+        e vai para uma lista à parte.</p>
       </details>
       <div id="blocoFora"></div>`;
   }
