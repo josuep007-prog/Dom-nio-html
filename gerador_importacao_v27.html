@@ -431,6 +431,20 @@
   .colar textarea{min-height:98px;font-size:12px;margin-top:8px}
   .colar .rec-tool-btn{margin-top:7px}
 
+  /* ---------- cartão da conferência mês a mês ---------- */
+  .modelo-comparar{margin-top:10px;border-left-color:var(--mod-lite)}
+  .modelo-comparar.lendo{opacity:.55;pointer-events:none}
+  .modelo-comparar.over{border-color:var(--mod);background:var(--mod-soft)}
+  .cmp-caixa{width:min(940px,100%)}
+  .cmp-seta{font-family:var(--mono);color:var(--ink-soft);padding:0 3px}
+  .cmp-mais{color:var(--green);font-weight:650}
+  .cmp-menos{color:var(--red);font-weight:650}
+  .cmp-vazio{color:var(--ink-soft);font-size:12.5px;margin:0;padding:10px 0}
+  .cmp-nome{font-weight:600}
+  .cmp-grupo{font-size:10.5px;color:var(--ink-soft);text-transform:uppercase;
+    letter-spacing:.08em;display:block;margin-top:1px}
+  .cmp-cod{font-family:var(--mono);font-size:12px;color:var(--ink-soft)}
+
   /* ---------- menu de parâmetros ---------- */
   .modal{position:fixed;inset:0;z-index:80;background:rgba(15,25,34,.6);
     display:flex;align-items:center;justify-content:center;padding:18px}
@@ -662,6 +676,17 @@
 </div>
 <input type="file" id="inContra" accept=".pdf,.txt" hidden>
 
+<div class="modelo modelo-comparar" id="cardComparar">
+  <div class="modelo-txt">
+    Solte <b>duas Relações Gerais dos Líquidos</b> — a do mês passado e a deste mês — e eu comparo
+    as duas folhas: quem entrou, quem saiu e quem teve o líquido alterado, com a diferença em
+    reais e em percentual. É a conferência que o departamento pessoal faz no fechamento,
+    sem gerar arquivo nenhum.
+  </div>
+  <button id="btnComparar" class="ghost">Comparar duas folhas</button>
+</div>
+<input type="file" id="inComparar" accept=".pdf" multiple hidden>
+
 <h2><span class="step">2</span> Planilha preenchida</h2>
 <div class="drop" id="dropDePara" tabindex="0" role="button" aria-label="Carregar a planilha preenchida">
   <div class="drop-title" id="dropTitulo">Arraste o de-para de RPA, ou clique para escolher</div>
@@ -784,6 +809,24 @@
       <span class="erro-inline" id="cpErro"></span>
       <button type="button" class="ghost" id="cpCancelar">Cancelar</button>
       <button type="button" id="cpGerar">Gerar modelo</button>
+    </footer>
+  </div>
+</div>
+
+<div class="modal" id="modalComparar" hidden>
+  <div class="modal-caixa cmp-caixa" role="dialog" aria-modal="true" aria-labelledby="cmpTitulo">
+    <header class="modal-topo">
+      <div>
+        <h3 id="cmpTitulo">Conferência mês a mês</h3>
+        <p class="modal-origem" id="cmpOrigem"></p>
+      </div>
+      <button type="button" class="modal-x" id="cmpFechar" aria-label="Fechar a conferência">&times;</button>
+    </header>
+    <div class="modal-corpo" id="cmpCorpo"></div>
+    <footer class="modal-rodape">
+      <span class="modal-resumo" id="cmpResumo"></span>
+      <button type="button" class="ghost" id="cmpCsv">Baixar conferência (.csv)</button>
+      <button type="button" id="cmpFechar2">Fechar</button>
     </footer>
   </div>
 </div>
@@ -1883,6 +1926,272 @@ function lerContrachequeTexto(){
   if(txt.trim().length<20){ erro("cole o texto do documento antes de ler"); return; }
   try{ interpretarDocumento([ linhasDoTexto(txt) ], "texto colado"); }
   catch(e){ erro("não consegui interpretar o texto: "+e.message); }
+}
+
+/* ##################### conferência mês a mês ##################### */
+/* Compara duas Relações Gerais dos Líquidos e mostra o que mudou de um mês
+   para o outro: quem entrou, quem saiu e quem teve o líquido alterado. Não
+   gera arquivo nenhum — é só a conferência de fechamento do departamento
+   pessoal, que hoje se faz olhando os dois relatórios lado a lado. */
+
+/* variação a partir daqui ganha destaque na lista */
+const CMP_PCT_ALERTA = 20;     /* % */
+const CMP_VAL_ALERTA = 500;    /* R$ */
+
+const GRUPO_ROTULO = {contribuintes:"contribuinte", empregados:"empregado",
+                      estagiarios:"estagiário"};
+
+/* o código do cadastro é a chave confiável; "0012" e "12" são a mesma pessoa */
+const codigoChave = c => String(c==null?"":c).replace(/\D/g,"").replace(/^0+(?=\d)/,"");
+
+function indicePessoas(rel){
+  const porCodigo = new Map();
+  const repetidos = [];
+  ["contribuintes","empregados","estagiarios"].forEach(g=>{
+    (rel.grupos[g]||[]).forEach(p=>{
+      const k = codigoChave(p.codigo);
+      if(!k) return;
+      if(porCodigo.has(k)){ repetidos.push(`${p.nome} — código ${p.codigo}`); return; }
+      porCodigo.set(k, {codigo:p.codigo, nome:p.nome, valor:p.valor, grupo:g});
+    });
+  });
+  return {porCodigo, repetidos};
+}
+
+function compararFolhas(relAntes, relDepois){
+  const A = indicePessoas(relAntes), B = indicePessoas(relDepois);
+  const avisos = [];
+  if(A.repetidos.length) avisos.push(`Código repetido no relatório anterior — considerei só a primeira linha: ${A.repetidos.join("; ")}`);
+  if(B.repetidos.length) avisos.push(`Código repetido no relatório atual — considerei só a primeira linha: ${B.repetidos.join("; ")}`);
+
+  const pares = [], sairam = [], entraram = [];
+  const usadosB = new Set();
+
+  A.porCodigo.forEach((pa,k)=>{
+    if(B.porCodigo.has(k)){ usadosB.add(k); pares.push([pa, B.porCodigo.get(k)]); }
+    else sairam.push(pa);
+  });
+  B.porCodigo.forEach((pb,k)=>{ if(!usadosB.has(k)) entraram.push(pb); });
+
+  /* quem trocou de código entre os dois meses (recadastro) apareceria como uma
+     saída e uma entrada; o nome reaproxima os dois e vira uma variação só */
+  const porNomeEntrou = new Map();
+  entraram.forEach(p=>{
+    const k = chave(p.nome);
+    if(porNomeEntrou.has(k)) porNomeEntrou.set(k, null);  /* nome ambíguo: não casa */
+    else porNomeEntrou.set(k, p);
+  });
+  const sairamFinal = [], recodificados = [];
+  for(const pa of sairam){
+    const par = porNomeEntrou.get(chave(pa.nome));
+    if(par){
+      pares.push([pa, par]);
+      recodificados.push(`${pa.nome} — código ${pa.codigo} virou ${par.codigo}`);
+      porNomeEntrou.set(chave(pa.nome), null);
+      continue;
+    }
+    sairamFinal.push(pa);
+  }
+  const entraramFinal = entraram.filter(p=>porNomeEntrou.get(chave(p.nome))===p);
+  if(recodificados.length)
+    avisos.push(`Mesmo nome com código diferente nos dois meses — tratei como a mesma pessoa: ${recodificados.join("; ")}`);
+
+  const mudaram = [], iguais = [];
+  for(const [pa,pb] of pares){
+    const dif = Math.round((pb.valor - pa.valor)*100)/100;
+    const pct = pa.valor ? (dif/Math.abs(pa.valor))*100 : (dif?Infinity:0);
+    const item = {codigo:pb.codigo, nome:pb.nome, grupo:pb.grupo,
+                  antes:pa.valor, depois:pb.valor, dif, pct,
+                  alerta: Math.abs(dif)>=CMP_VAL_ALERTA || Math.abs(pct)>=CMP_PCT_ALERTA};
+    if(Math.abs(dif) < 0.005) iguais.push(item); else mudaram.push(item);
+  }
+  mudaram.sort((x,y)=>Math.abs(y.dif)-Math.abs(x.dif));
+  sairamFinal.sort((x,y)=>y.valor-x.valor);
+  entraramFinal.sort((x,y)=>y.valor-x.valor);
+
+  const soma = l => l.reduce((s,p)=>s+(p.valor||p.depois||0),0);
+  const totalAntes  = [...A.porCodigo.values()].reduce((s,p)=>s+p.valor,0);
+  const totalDepois = [...B.porCodigo.values()].reduce((s,p)=>s+p.valor,0);
+
+  return {
+    antes:{competencia:relAntes.competencia, empresa:relAntes.empresa,
+           pessoas:A.porCodigo.size, total:totalAntes},
+    depois:{competencia:relDepois.competencia, empresa:relDepois.empresa,
+            pessoas:B.porCodigo.size, total:totalDepois},
+    entraram:entraramFinal, sairam:sairamFinal, mudaram, iguais,
+    somaEntraram:soma(entraramFinal), somaSairam:soma(sairamFinal),
+    difTotal: Math.round((totalDepois-totalAntes)*100)/100,
+    avisos,
+  };
+}
+
+/* ordena os dois relatórios pela competência — o mais antigo é a base */
+function ordenarPorCompetencia(a, b){
+  const n = rel => { try{ return Number(competenciaAAAAMM(rel.competencia)); }catch(e){ return null; } };
+  const na = n(a), nb = n(b);
+  if(na!==null && nb!==null && nb<na) return [b,a];
+  return [a,b];
+}
+
+const cmpDelta = (v, comSinal) => {
+  const s = v>0 ? "cmp-mais" : (v<0 ? "cmp-menos" : "");
+  const sinal = comSinal && v>0 ? "+" : (v<0 ? "−" : "");
+  return `<span class="${s}">${sinal}R$ ${moeda(Math.abs(v))}</span>`;
+};
+const cmpPct = p => {
+  if(!Number.isFinite(p)) return '<span class="pill pill-neutro">novo valor</span>';
+  const s = p>0 ? "cmp-mais" : (p<0 ? "cmp-menos" : "");
+  return `<span class="${s}">${p>0?"+":(p<0?"−":"")}${Math.abs(p).toFixed(1).replace(".",",")}%</span>`;
+};
+const cmpPessoa = p =>
+  `<span class="cmp-nome">${escapar(p.nome)}</span>`+
+  `<span class="cmp-grupo">${escapar(GRUPO_ROTULO[p.grupo]||p.grupo)}</span>`;
+
+function tabelaCmp(titulo, colunas, corpo){
+  if(!corpo) return `<h4>${escapar(titulo)}</h4><p class="cmp-vazio">Ninguém nesta situação.</p>`;
+  return `<h4>${escapar(titulo)}</h4><table class="tabela-lote"><thead><tr>`+
+    colunas.map(c=>`<th${c.num?' class="num"':""}>${escapar(c.t)}</th>`).join("")+
+    `</tr></thead><tbody>${corpo}</tbody></table>`;
+}
+
+let cmpUltimo = null;
+
+function abrirComparacao(cmp, origem){
+  cmpUltimo = cmp;
+  const $ = id => document.getElementById(id);
+  const compA = competenciaExibicao(cmp.antes.competencia) || "competência não lida";
+  const compB = competenciaExibicao(cmp.depois.competencia) || "competência não lida";
+
+  $("cmpTitulo").textContent = "Conferência mês a mês";
+  $("cmpOrigem").textContent =
+    `${cmp.depois.empresa || cmp.antes.empresa || "empresa não lida"} · ${compA} → ${compB}`+
+    (origem ? ` · ${origem}` : "");
+
+  let html = "";
+  if(cmp.avisos.length)
+    html += `<div class="msg warn"><strong>Confira estes pontos</strong><ul>`+
+      cmp.avisos.map(a=>`<li>${escapar(a)}</li>`).join("")+`</ul></div>`;
+  if(!cmp.antes.competencia || !cmp.depois.competencia || compA===compB)
+    html += `<div class="msg warn"><strong>Competências iguais ou não reconhecidas</strong>`+
+      `Confira se os dois arquivos são mesmo de meses diferentes — comparei na ordem `+
+      `em que consegui ler.</div>`;
+
+  html += `<div class="tot">
+      <div>Pessoas<b>${cmp.antes.pessoas} <span class="cmp-seta">→</span> ${cmp.depois.pessoas}</b></div>
+      <div>Total líquido<b>R$ ${moeda(cmp.depois.total)}</b></div>
+      <div>Variação no total<b>${cmpDelta(cmp.difTotal, true)}</b></div>
+      <div>Entraram / saíram<b>${cmp.entraram.length} <span class="cmp-seta">/</span> ${cmp.sairam.length}</b></div>
+    </div>`;
+
+  html += tabelaCmp(`Entraram em ${compB} — ${cmp.entraram.length} pessoa(s), R$ ${moeda(cmp.somaEntraram)}`,
+    [{t:"Código"},{t:"Nome"},{t:"Líquido",num:true}],
+    cmp.entraram.map(p=>`<tr>
+      <td class="cmp-cod">${escapar(String(p.codigo))}</td>
+      <td>${cmpPessoa(p)}</td>
+      <td class="num">R$ ${moeda(p.valor)}</td></tr>`).join(""));
+
+  html += tabelaCmp(`Saíram depois de ${compA} — ${cmp.sairam.length} pessoa(s), R$ ${moeda(cmp.somaSairam)}`,
+    [{t:"Código"},{t:"Nome"},{t:`Líquido em ${compA}`,num:true}],
+    cmp.sairam.map(p=>`<tr>
+      <td class="cmp-cod">${escapar(String(p.codigo))}</td>
+      <td>${cmpPessoa(p)}</td>
+      <td class="num">R$ ${moeda(p.valor)}</td></tr>`).join(""));
+
+  html += tabelaCmp(`Líquido alterado — ${cmp.mudaram.length} pessoa(s)`,
+    [{t:"Código"},{t:"Nome"},{t:compA,num:true},{t:compB,num:true},
+     {t:"Diferença",num:true},{t:"%",num:true},{t:""}],
+    cmp.mudaram.map(p=>`<tr>
+      <td class="cmp-cod">${escapar(String(p.codigo))}</td>
+      <td>${cmpPessoa(p)}</td>
+      <td class="num">R$ ${moeda(p.antes)}</td>
+      <td class="num">R$ ${moeda(p.depois)}</td>
+      <td class="num">${cmpDelta(p.dif, true)}</td>
+      <td class="num">${cmpPct(p.pct)}</td>
+      <td>${p.alerta?'<span class="pill pill-erro">conferir</span>':""}</td></tr>`).join(""));
+
+  html += `<h4>Sem alteração</h4><p class="cmp-vazio">`+
+    `${cmp.iguais.length} pessoa(s) receberam exatamente o mesmo líquido nos dois meses.</p>`;
+
+  document.getElementById("cmpCorpo").innerHTML = html;
+  const alertas = cmp.mudaram.filter(p=>p.alerta).length;
+  document.getElementById("cmpResumo").textContent =
+    `${cmp.mudaram.length} com o líquido alterado`+
+    (alertas ? ` · ${alertas} acima de ${CMP_PCT_ALERTA}% ou R$ ${moeda(CMP_VAL_ALERTA)}` : "");
+
+  document.getElementById("modalComparar").hidden = false;
+  document.body.style.overflow = "hidden";
+}
+
+function fecharComparacao(){
+  document.getElementById("modalComparar").hidden = true;
+  document.body.style.overflow = "";
+}
+
+function csvComparacao(cmp){
+  const compA = competenciaExibicao(cmp.antes.competencia);
+  const compB = competenciaExibicao(cmp.depois.competencia);
+  const cab = ["Situação","Código","Nome","Grupo",`Líquido ${compA}`,`Líquido ${compB}`,
+               "Diferença","Variação %"];
+  const linhas = [];
+  cmp.entraram.forEach(p=>linhas.push(["Entrou", p.codigo, p.nome,
+    GRUPO_ROTULO[p.grupo]||p.grupo, "", moeda(p.valor), moeda(p.valor), ""]));
+  cmp.sairam.forEach(p=>linhas.push(["Saiu", p.codigo, p.nome,
+    GRUPO_ROTULO[p.grupo]||p.grupo, moeda(p.valor), "", moeda(-p.valor), ""]));
+  cmp.mudaram.forEach(p=>linhas.push([p.alerta?"Alterado (conferir)":"Alterado",
+    p.codigo, p.nome, GRUPO_ROTULO[p.grupo]||p.grupo,
+    moeda(p.antes), moeda(p.depois), moeda(p.dif),
+    Number.isFinite(p.pct) ? p.pct.toFixed(1).replace(".",",") : ""]));
+  cmp.iguais.forEach(p=>linhas.push(["Sem alteração", p.codigo, p.nome,
+    GRUPO_ROTULO[p.grupo]||p.grupo, moeda(p.antes), moeda(p.depois), moeda(0), "0,0"]));
+  linhas.push([]);
+  /* o .csv sai em Latin-1 como o resto do programa: nada de seta "→" aqui, que vira "?" */
+  linhas.push(["TOTAL", "", `${cmp.antes.pessoas} para ${cmp.depois.pessoas} pessoas`, "",
+    moeda(cmp.antes.total), moeda(cmp.depois.total), moeda(cmp.difTotal), ""]);
+  return csvDe(cab, linhas);
+}
+
+function baixarCsvComparacao(){
+  if(!cmpUltimo) return;
+  const nome = `Conferencia_${sanitizarNomeArquivo(cmpUltimo.depois.empresa||"empresa")}`+
+    `_${sanitizarNomeArquivo(competenciaExibicao(cmpUltimo.antes.competencia))}`+
+    `_x_${sanitizarNomeArquivo(competenciaExibicao(cmpUltimo.depois.competencia))}.csv`;
+  baixarBytes(paraBytesLatin1(csvComparacao(cmpUltimo)), nome, "text/csv");
+}
+
+async function lerParaComparar(arquivos){
+  const cartao = document.getElementById("cardComparar");
+  const btn = document.getElementById("btnComparar");
+  const rotulo = btn.textContent;
+  cartao.classList.add("lendo");
+  btn.textContent = "Lendo…";
+  btn.disabled = true;
+  await new Promise(r=>setTimeout(r,30));
+
+  try{
+    if(arquivos.length!==2)
+      throw new Error(`a conferência compara dois relatórios — chegaram ${arquivos.length}`);
+    const lidos = [];
+    for(const f of arquivos){
+      const paginas = await linhasDoPdf(new Uint8Array(await f.arrayBuffer()));
+      if(!paginas.reduce((s,p)=>s+p.length,0))
+        throw new Error(`"${f.name}" não tem texto — parece digitalizado. Exporte de novo em PDF de texto.`);
+      if(!ehRelacaoLiquidos(paginas))
+        throw new Error(`"${f.name}" não parece uma Relação Geral dos Líquidos — a conferência só compara esse relatório.`);
+      lidos.push({rel: analisarRelacaoLiquidos(paginas), nome: f.name});
+    }
+    const [a,b] = ordenarPorCompetencia(lidos[0].rel, lidos[1].rel);
+    const nomeA = lidos.find(x=>x.rel===a).nome, nomeB = lidos.find(x=>x.rel===b).nome;
+    const cmp = compararFolhas(a, b);
+    if(!cmp.antes.pessoas && !cmp.depois.pessoas)
+      throw new Error("não consegui ler nenhuma linha de pessoa nos dois relatórios");
+    abrirComparacao(cmp, `${nomeA} × ${nomeB}`);
+  }catch(e){
+    erro("não deu para comparar: "+e.message);
+  }finally{
+    cartao.classList.remove("lendo");
+    btn.textContent = rotulo;
+    btn.disabled = false;
+  }
 }
 
 /* ##################### tipos de processo ##################### */
@@ -3743,9 +4052,14 @@ function copiarTexto(){
 
   function processar(fileList){
     const todos=[...fileList];
-    const contra=todos.find(f=>/\.(pdf|txt)$/i.test(f.name));
+    const docs=todos.filter(f=>/\.(pdf|txt)$/i.test(f.name));
     const arquivos=todos.filter(f=>/\.(xlsx|xlsm|xls)$/i.test(f.name));
-    if(!arquivos.length && contra){ lerContracheque(contra); return; }
+    /* dois ou mais PDFs de uma vez só fazem sentido como conferência mês a mês —
+       antes disso o segundo arquivo era descartado sem avisar */
+    if(!arquivos.length && docs.length>1 && docs.every(f=>/\.pdf$/i.test(f.name))){
+      lerParaComparar(docs); return;
+    }
+    if(!arquivos.length && docs.length){ lerContracheque(docs[0]); return; }
     if(!arquivos.length){
       erro("solte uma planilha .xlsx ou um contracheque .pdf — foi outro tipo de arquivo que chegou aqui");
       return;
@@ -3832,6 +4146,31 @@ function copiarTexto(){
   });
   document.getElementById("btnColar").addEventListener("click",lerContrachequeTexto);
 
+  /* ---- conferência mês a mês ---- */
+  const cardCmp=document.getElementById("cardComparar"),
+        inCmp=document.getElementById("inComparar");
+  document.getElementById("btnComparar").addEventListener("click",e=>{ e.stopPropagation(); inCmp.click(); });
+  inCmp.addEventListener("change",e=>{
+    if(e.target.files.length) lerParaComparar([...e.target.files]);
+    e.target.value="";
+  });
+  ["dragenter","dragover"].forEach(ev=>cardCmp.addEventListener(ev,e=>{
+    e.preventDefault(); cardCmp.classList.add("over"); }));
+  ["dragleave","drop"].forEach(ev=>cardCmp.addEventListener(ev,e=>{
+    e.preventDefault(); cardCmp.classList.remove("over"); }));
+  cardCmp.addEventListener("drop",e=>{
+    e.stopPropagation(); dragDepth=0; if(overlay) overlay.hidden=true;
+    const pdfs=[...e.dataTransfer.files].filter(x=>/\.pdf$/i.test(x.name));
+    if(pdfs.length) lerParaComparar(pdfs);
+    else erro("a conferência mês a mês compara dois PDF de Relação Geral dos Líquidos");
+  });
+  document.getElementById("cmpFechar").addEventListener("click",fecharComparacao);
+  document.getElementById("cmpFechar2").addEventListener("click",fecharComparacao);
+  document.getElementById("cmpCsv").addEventListener("click",baixarCsvComparacao);
+  document.getElementById("modalComparar").addEventListener("mousedown",e=>{
+    if(e.target.id==="modalComparar") fecharComparacao();
+  });
+
   /* ---- menu de parâmetros ---- */
   document.getElementById("cpFechar").addEventListener("click",fecharMenuContracheque);
   document.getElementById("cpCancelar").addEventListener("click",fecharMenuContracheque);
@@ -3870,6 +4209,10 @@ function copiarTexto(){
   });
 
   document.addEventListener("keydown",e=>{
+    if(!document.getElementById("modalComparar").hidden){
+      if(e.key==="Escape"){ e.preventDefault(); fecharComparacao(); }
+      return;
+    }
     const modalAberto = !document.getElementById("modalContra").hidden;
     if(e.key==="Escape" && modalAberto){ e.preventDefault(); fecharMenuContracheque(); return; }
     if(modalAberto){
